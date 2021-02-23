@@ -44,7 +44,7 @@ func TxFromHex(rawHex string) (*bt.Tx, error) {
 // USE AT YOUR OWN RISK - this will modify a "pay-to" output to accomplish auto-fees
 func CreateTxWithChange(utxos []*Utxo, payToAddresses []*PayToAddress, opReturns []OpReturnData,
 	changeAddress string, standardRate, dataRate *bt.Fee,
-	privateKey *bsvec.PrivateKey) (*bt.Tx, error) {
+	privateKey *bsvec.PrivateKey, data OpReturnData) (*bt.Tx, error) {
 
 	// Missing utxo(s) or change address
 	if len(utxos) == 0 {
@@ -89,7 +89,7 @@ func CreateTxWithChange(utxos []*Utxo, payToAddresses []*PayToAddress, opReturns
 	}
 
 	// Create the "Draft tx"
-	fee, err := draftTx(utxos, payToAddresses, opReturns, privateKey, standardRate, dataRate)
+	fee, err := draftTx(utxos, payToAddresses, opReturns, privateKey, standardRate, dataRate, data)
 	if err != nil {
 		return nil, err
 	}
@@ -104,7 +104,7 @@ func CreateTxWithChange(utxos []*Utxo, payToAddresses []*PayToAddress, opReturns
 
 		// Re-run draft tx with no change address
 		if fee, err = draftTx(
-			utxos, payToAddresses, opReturns, privateKey, standardRate, dataRate,
+			utxos, payToAddresses, opReturns, privateKey, standardRate, dataRate, data,
 		); err != nil {
 			return nil, err
 		}
@@ -151,15 +151,15 @@ func CreateTxWithChange(utxos []*Utxo, payToAddresses []*PayToAddress, opReturns
 	}
 
 	// Create the "Final tx" (or error)
-	return CreateTx(utxos, payToAddresses, opReturns, privateKey)
+	return CreateTx(utxos, payToAddresses, opReturns, privateKey, data)
 }
 
 // draftTx is a helper method to create a draft tx and associated fees
 func draftTx(utxos []*Utxo, payToAddresses []*PayToAddress, opReturns []OpReturnData,
-	privateKey *bsvec.PrivateKey, standardRate, dataRate *bt.Fee) (uint64, error) {
+	privateKey *bsvec.PrivateKey, standardRate, dataRate *bt.Fee, data OpReturnData) (uint64, error) {
 
 	// Create the "Draft tx"
-	tx, err := CreateTx(utxos, payToAddresses, opReturns, privateKey)
+	tx, err := CreateTx(utxos, payToAddresses, opReturns, privateKey, data)
 	if err != nil {
 		return 0, err
 	}
@@ -175,7 +175,7 @@ func draftTx(utxos []*Utxo, payToAddresses []*PayToAddress, opReturns []OpReturn
 // Use this if you don't want to figure out fees/change for a tx
 // USE AT YOUR OWN RISK - this will modify a "pay-to" output to accomplish auto-fees
 func CreateTxWithChangeUsingWif(utxos []*Utxo, payToAddresses []*PayToAddress, opReturns []OpReturnData,
-	changeAddress string, standardRate, dataRate *bt.Fee, wif string) (*bt.Tx, error) {
+	changeAddress string, standardRate, dataRate *bt.Fee, wif string, data OpReturnData) (*bt.Tx, error) {
 
 	// Decode the WIF
 	privateKey, err := WifToPrivateKey(wif)
@@ -184,7 +184,7 @@ func CreateTxWithChangeUsingWif(utxos []*Utxo, payToAddresses []*PayToAddress, o
 	}
 
 	// Create the "Final tx" (or error)
-	return CreateTxWithChange(utxos, payToAddresses, opReturns, changeAddress, standardRate, dataRate, privateKey)
+	return CreateTxWithChange(utxos, payToAddresses, opReturns, changeAddress, standardRate, dataRate, privateKey, data)
 }
 
 // CreateTx will create a basic transaction and return the raw transaction (*transaction.Transaction)
@@ -195,7 +195,7 @@ func CreateTxWithChangeUsingWif(utxos []*Utxo, payToAddresses []*PayToAddress, o
 // Get the raw hex version: tx.ToString()
 // Get the tx id: tx.GetTxID()
 func CreateTx(utxos []*Utxo, addresses []*PayToAddress,
-	opReturns []OpReturnData, privateKey *bsvec.PrivateKey) (*bt.Tx, error) {
+	opReturns []OpReturnData, privateKey *bsvec.PrivateKey, data OpReturnData) (*bt.Tx, error) {
 
 	// Start creating a new transaction
 	tx := bt.NewTx()
@@ -213,8 +213,14 @@ func CreateTx(utxos []*Utxo, addresses []*PayToAddress,
 	}
 
 	// Loop any pay addresses
-	for _, address := range addresses {
-		if err = tx.PayTo(address.Address, address.Satoshis); err != nil {
+	for i, address := range addresses {
+		// TODO: this is a horrible hack. Only works for our environment. I.E only
+		// attach push data if its the first output and assume the second output is
+		// change address
+		if i != 0 {
+			data = [][]byte{}
+		}
+		if err = tx.PayTo(address.Address, address.Satoshis, data); err != nil {
 			return nil, err
 		}
 	}
@@ -259,7 +265,7 @@ func CreateTx(utxos []*Utxo, addresses []*PayToAddress,
 // Get the raw hex version: tx.ToString()
 // Get the tx id: tx.GetTxID()
 func CreateTxUsingWif(utxos []*Utxo, addresses []*PayToAddress,
-	opReturns []OpReturnData, wif string) (*bt.Tx, error) {
+	opReturns []OpReturnData, wif string, data OpReturnData) (*bt.Tx, error) {
 
 	// Decode the WIF
 	privateKey, err := WifToPrivateKey(wif)
@@ -268,7 +274,7 @@ func CreateTxUsingWif(utxos []*Utxo, addresses []*PayToAddress,
 	}
 
 	// Create the Tx
-	return CreateTx(utxos, addresses, opReturns, privateKey)
+	return CreateTx(utxos, addresses, opReturns, privateKey, data)
 }
 
 // CalculateFeeForTx will estimate a fee for the given transaction

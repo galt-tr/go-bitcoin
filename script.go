@@ -14,7 +14,7 @@ func ScriptFromAddress(address string) (string, error) {
 	}
 
 	// Generate a script from address
-	rawScript, err := bscript.NewP2PKHFromAddress(address)
+	rawScript, err := bscript.NewP2PKHFromAddress(address, [][]byte{})
 	if err != nil {
 		return "", err
 	}
