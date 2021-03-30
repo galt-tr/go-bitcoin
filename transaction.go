@@ -122,8 +122,11 @@ func CreateTxWithChange(utxos []*Utxo, payToAddresses []*PayToAddress, opReturns
 		for i := len(payToAddresses) - 1; i >= 0; i-- { // Working backwards
 			if payToAddresses[i].Satoshis > remainder {
 				payToAddresses[i].Satoshis = payToAddresses[i].Satoshis - remainder
-				feeAdjusted = true
-				break
+				// It's possible for the remainder subtraction
+				if payToAddresses[i].Satoshis >= DustLimit {
+					feeAdjusted = true
+					break
+				}
 			}
 		}
 
