@@ -95,6 +95,7 @@ func CreateTxWithChange(utxos []*Utxo, payToAddresses []*PayToAddress, opReturns
 	}
 
 	// Check that we have enough to cover the fee
+	// i.e. if outputs are greater than inputs
 	if (totalPayToSatoshis + fee) > totalSatoshis {
 
 		// Remove temporary change address first
@@ -121,9 +122,11 @@ func CreateTxWithChange(utxos []*Utxo, payToAddresses []*PayToAddress, opReturns
 		feeAdjusted := false
 		for i := len(payToAddresses) - 1; i >= 0; i-- { // Working backwards
 			if payToAddresses[i].Satoshis > remainder {
-				payToAddresses[i].Satoshis = payToAddresses[i].Satoshis - remainder
-				feeAdjusted = true
-				break
+				if payToAddresses[i].Satoshis-remainder >= DustLimit {
+					payToAddresses[i].Satoshis = payToAddresses[i].Satoshis - remainder
+					feeAdjusted = true
+					break
+				}
 			}
 		}
 
@@ -142,11 +145,13 @@ func CreateTxWithChange(utxos []*Utxo, payToAddresses []*PayToAddress, opReturns
 		// Add the change address as the difference (now with adjusted fee)
 		if hasChange {
 			payToAddresses = payToAddresses[:len(payToAddresses)-1]
+			if totalSatoshis-(totalPayToSatoshis+fee) >= DustLimit {
 
-			payToAddresses = append(payToAddresses, &PayToAddress{
-				Address:  changeAddress,
-				Satoshis: totalSatoshis - (totalPayToSatoshis + fee),
-			})
+				payToAddresses = append(payToAddresses, &PayToAddress{
+					Address:  changeAddress,
+					Satoshis: totalSatoshis - (totalPayToSatoshis + fee),
+				})
+			}
 		}
 	}
 
